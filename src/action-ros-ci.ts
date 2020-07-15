@@ -178,7 +178,7 @@ async function run() {
 		const curlFlags = curlFlagsArray.join(" ");
 		for (let vcsRepoFileUrl of vcsRepoFileUrlListResolved) {
 			await execBashCommand(
-				`curl ${curlFlags} '${vcsRepoFileUrl}' | vcs import --force src/`,
+				`curl ${curlFlags} '${vcsRepoFileUrl}' | vcs import --force --recursive src/`,
 				commandPrefix,
 				options
 			);
@@ -282,10 +282,13 @@ async function run() {
 		// where this does not happen. See issue #26 for relevant CI logs.
 		core.addPath(path.join(rosWorkspaceDir, "install", "bin"));
 
-		let colconBuildCmd = `colcon build --event-handlers console_cohesion+ --symlink-install \
+		let colconBuildCmd = `colcon build --event-handlers console_cohesion+ \
 			--packages-up-to ${packageNameList.join(" ")} \
 			${extra_options.join(" ")} \
 			--cmake-args ${extraCmakeArgs}`;
+		if (process.platform !== "win32") {
+			colconBuildCmd = colconBuildCmd.concat(" --symlink-install");
+		}
 		await execBashCommand(colconBuildCmd, commandPrefix, options);
 
 		// ignoreReturnCode is set to true to avoid having a lack of coverage
@@ -297,7 +300,7 @@ async function run() {
 		});
 
 		const colconTestCmd = `colcon test --event-handlers console_cohesion+ \
-			--pytest-args --cov=. --cov-report=xml --return-code-on-test-failure \
+			--pytest-with-coverage --return-code-on-test-failure \
 			--packages-select ${packageNameList.join(" ")} \
 			${extra_options.join(" ")}`;
 		await execBashCommand(colconTestCmd, commandPrefix, options);
@@ -310,6 +313,10 @@ async function run() {
 			cwd: rosWorkspaceDir,
 			ignoreReturnCode: true,
 		});
+
+		const colconCoveragepyResultCmd = `colcon coveragepy-result \
+				--packages-select ${packageNameList.join(" ")}`;
+		await execBashCommand(colconCoveragepyResultCmd, commandPrefix, options);
 
 		core.setOutput("ros-workspace-directory-name", rosWorkspaceName);
 	} catch (error) {
